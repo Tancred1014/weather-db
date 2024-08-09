@@ -4,16 +4,18 @@ const app = express()
 const port = 3000
 
 const db = require('./models')
-const Weather = db.Weather
+const Weather = db.WeatherCache
+
+console.log(Weather)
 
 app.get('/', (req, res) => {
   res.send('hello world')
 })
 
-app.get('/weathers', (req, res) => {
+app.get('/Weather', (req, res) => {
   return Weather.findAll()
-    .then((weathers) => res.send({ weathers }))
-    .catch((err) => { res.status(422).json(err) })
+    .then((weather) => res.send({ weather }))
+    .catch((err) => res.status(422).json(err))
 })
 
 app.get('/weathers/:city', (req, res) => {
