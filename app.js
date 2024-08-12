@@ -80,7 +80,11 @@ app.get('/weather/:city', async (req, res) => {
   }
 });
 
-
-app.listen(3000, () => {
-  console.log('App is running on post 3000')
-})
+// 確保數據庫連接和模型同步
+db.sequelize.sync().then(() => {
+  app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+  });
+}).catch(error => {
+  console.error('Unable to connect to the database:', error);
+});
