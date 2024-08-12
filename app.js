@@ -36,6 +36,21 @@ app.get('/weathers/:city', (req, res) => {
   if (!locationData) {
     return res.status(404).json({ error: 'City not found' });
   }
+
+  // 處理和格式化數據
+  const formattedData = {
+    city: locationData.locationName,
+    weather: locationData.weatherElement.reduce((acc, element) => {
+      acc[element.elementName] = element.time.map(timeData => ({
+        startTime: timeData.startTime,
+        endTime: timeData.endTime,
+        value: timeData.parameter.parameterName,
+        unit: timeData.parameter.parameterUnit
+      }));
+      return acc;
+    }, {})
+  };
+
 })
 
 app.listen(3000, () => {
