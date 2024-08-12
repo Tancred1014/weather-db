@@ -17,41 +17,69 @@ app.get('/Weather', (req, res) => {
     .catch((err) => res.status(422).json(err))
 })
 
-app.get('/weathers/:city', (req, res) => {
-  res.send(`get weather: ${req.params.id}`)
+app.get('/weather/:city', async (req, res) => {
+  const { city } = req.params;
 
-  // 使用 fetch 從中央氣象署API獲取數據
-  const url = new URL('https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-001?Authorization=CWA-170A256F-A2D0-401E-BE60-63929987B84E');
-  url.searchParams.append('Authorization', process.env.CWA_API_KEY);
-  url.searchParams.append('locationName', city);
+  try {
+    // 檢查緩存
+    const cachedData = await db.WeatherCache.findOne({
+      where: {
+        city,
+        timestamp: {
+          [Op.gt]: new Date(Date.now() - 60 * 60 * 1000) // 1 小時內
+        }
+      }
+    });
 
-  const response = fetch(url);
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+    if (cachedData) {
+      return res.json(cachedData.data);
+    }
+
+    // 使用 fetch 從中央氣象署API獲取數據
+    const url = new URL('https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-001?Authorization=CWA-428071F5-3244-4829-9E2E-21C8B7FA62BA');
+    url.searchParams.append('Authorization', process.env.CWA_API_KEY);
+    url.searchParams.append('locationName', city);
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data = await response.json();
+
+    const locationData = data.records.location[0];
+
+    if (!locationData) {
+      return res.status(404).json({ error: 'City not found' });
+    }
+
+    // 處理和格式化數據
+    const formattedData = {
+      city: locationData.locationName,
+      weather: locationData.weatherElement.reduce((acc, element) => {
+        acc[element.elementName] = element.time.map(timeData => ({
+          startTime: timeData.startTime,
+          endTime: timeData.endTime,
+          value: timeData.parameter.parameterName,
+          unit: timeData.parameter.parameterUnit
+        }));
+        return acc;
+      }, {})
+    };
+
+    // 緩存數據
+    await db.WeatherCache.upsert({
+      city,
+      data: formattedData,
+      timestamp: new Date()
+    });
+
+    res.json(formattedData);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'An error occurred while fetching weather data' });
   }
-  const data = response.json();
+});
 
-  const locationData = data.records.location[0];
-
-  if (!locationData) {
-    return res.status(404).json({ error: 'City not found' });
-  }
-
-  // 處理和格式化數據
-  const formattedData = {
-    city: locationData.locationName,
-    weather: locationData.weatherElement.reduce((acc, element) => {
-      acc[element.elementName] = element.time.map(timeData => ({
-        startTime: timeData.startTime,
-        endTime: timeData.endTime,
-        value: timeData.parameter.parameterName,
-        unit: timeData.parameter.parameterUnit
-      }));
-      return acc;
-    }, {})
-  };
-
-})
 
 app.listen(3000, () => {
   console.log('App is running on post 3000')
